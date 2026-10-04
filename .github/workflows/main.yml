@@ -21,20 +21,17 @@ jobs:
           echo "Searching for Android project..."
           find build_src -name "settings.gradle.kts" -o -name "settings.gradle"
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
       - name: Build APK
         run: |
           PROJECT_DIR=$(dirname "$(find build_src -name 'settings.gradle.kts' -o -name 'settings.gradle' | head -n 1)")
           echo "PROJECT_DIR=$PROJECT_DIR"
           cd "$PROJECT_DIR"
-
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleDebug
-          else
-            sudo apt-get update
-            sudo apt-get install -y gradle
-            gradle assembleDebug
-          fi
+          gradle assembleDebug --stacktrace
 
       - name: Find APK
         run: |
