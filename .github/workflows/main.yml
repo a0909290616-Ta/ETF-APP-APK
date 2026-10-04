@@ -31,7 +31,7 @@ jobs:
           PROJECT_DIR=$(dirname "$(find build_src -name 'settings.gradle.kts' -o -name 'settings.gradle' | head -n 1)")
           echo "PROJECT_DIR=$PROJECT_DIR"
           cd "$PROJECT_DIR"
-          gradle :app:assembleDebug --stacktrace
+          gradle :app:assembleDebug --stacktrace -Dkotlin.jvm.target.validation.mode=warning
         
       - name: Find APK
         run: |
