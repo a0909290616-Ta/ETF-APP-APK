@@ -31,8 +31,8 @@ jobs:
           PROJECT_DIR=$(dirname "$(find build_src -name 'settings.gradle.kts' -o -name 'settings.gradle' | head -n 1)")
           echo "PROJECT_DIR=$PROJECT_DIR"
           cd "$PROJECT_DIR"
-          gradle assembleDebug --stacktrace
-
+          gradle :app:assembleDebug --stacktrace
+        
       - name: Find APK
         run: |
           find build_src -type f -name "*.apk"
