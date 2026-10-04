@@ -1,0 +1,47 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unzip Android project
+        run: |
+          mkdir -p build_src
+          unzip -o *.zip -d build_src
+
+      - name: Find Android project
+        run: |
+          echo "Searching for Android project..."
+          find build_src -name "settings.gradle.kts" -o -name "settings.gradle"
+
+      - name: Build APK
+        run: |
+          PROJECT_DIR=$(dirname "$(find build_src -name 'settings.gradle.kts' -o -name 'settings.gradle' | head -n 1)")
+          echo "PROJECT_DIR=$PROJECT_DIR"
+          cd "$PROJECT_DIR"
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug
+          else
+            sudo apt-get update
+            sudo apt-get install -y gradle
+            gradle assembleDebug
+          fi
+
+      - name: Find APK
+        run: |
+          find build_src -type f -name "*.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ETF-Trading-Manager-APK
+          path: build_src/**/build/outputs/apk/**/*.apk
