@@ -27,12 +27,30 @@ jobs:
           gradle-version: "8.13"
 
       - name: Build APK
+      
         run: |
           PROJECT_DIR=$(dirname "$(find build_src -name 'settings.gradle.kts' -o -name 'settings.gradle' | head -n 1)")
           echo "PROJECT_DIR=$PROJECT_DIR"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          for p in Path("build_src").rglob("build.gradle*"):
+              s = p.read_text()
+
+              s = s.replace("JavaVersion.VERSION_1_8", "JavaVersion.VERSION_17")
+              s = s.replace("JavaVersion.VERSION_8", "JavaVersion.VERSION_17")
+              s = s.replace('jvmTarget = "1.8"', 'jvmTarget = "17"')
+              s = s.replace("jvmTarget = '1.8'", 'jvmTarget = "17"')
+              s = re.sub(r'sourceCompatibility\s*=\s*["\']1\.8["\']', 'sourceCompatibility = JavaVersion.VERSION_17', s)
+              s = re.sub(r'targetCompatibility\s*=\s*["\']1\.8["\']', 'targetCompatibility = JavaVersion.VERSION_17', s)
+
+              p.write_text(s)
+          PY
+
           cd "$PROJECT_DIR"
-          gradle :app:assembleDebug --stacktrace -Dkotlin.jvm.target.validation.mode=warning
-        
+          gradle :app:assembleDebug --stacktrace
       - name: Find APK
         run: |
           find build_src -type f -name "*.apk"
