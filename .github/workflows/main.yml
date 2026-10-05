@@ -3,7 +3,8 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build:
@@ -17,32 +18,77 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Unzip Android project
         run: |
           mkdir -p build_src
           unzip -o *.zip -d build_src
 
+          echo "=== ZIP contents ==="
+          find build_src -maxdepth 6 -type f | head -200
+
+          echo "=== Find nested ZIP files ==="
+          find build_src -type f -name "*.zip"
+
+          echo "=== Extract nested ZIP files ==="
+          find build_src -type f -name "*.zip" -print0 | while IFS= read -r -d '' z; do
+            d="$(dirname "$z")"
+            echo "Extracting $z"
+            unzip -o "$z" -d "$d"
+          done
+
+      - name: Find Android project
+        run: |
+          echo "=== Searching Android project ==="
+          find build_src -name "settings.gradle.kts" -o -name "settings.gradle"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.13'
+          gradle-version: "8.13"
 
       - name: Install Android SDK packages
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
+          yes | sdkmanager --licenses || true
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build debug APK
         run: |
           PROJECT_DIR=$(dirname "$(find build_src -name 'settings.gradle.kts' -o -name 'settings.gradle' | head -n 1)")
-          test -n "$PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR"
+
+          cat > /tmp/force-java17.gradle <<'GRADLE'
+          allprojects {
+              tasks.withType(JavaCompile).configureEach {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                  kotlinOptions.jvmTarget = "17"
+              }
+          }
+          GRADLE
+
           cd "$PROJECT_DIR"
-          gradle :app:assembleDebug --no-daemon --stacktrace
+
+          gradle \
+            --init-script /tmp/force-java17.gradle \
+            :app:assembleDebug \
+            --stacktrace
+
+      - name: Find APK
+        run: |
+          echo "=== APK files ==="
+          find build_src -type f -name "*.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ETFTradingManager-debug
-          path: build_src/**/build/outputs/apk/debug/app-debug.apk
+          name: ETF-Trading-Manager-APK
+          path: build_src/**/build/outputs/apk/**/*.apk
