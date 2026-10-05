@@ -25,20 +25,42 @@ jobs:
           mkdir -p build_src
           unzip -o *.zip -d build_src
 
-          echo "=== Find ZIP files ==="
-          find build_src -type f -name "*.zip"
-
-          echo "=== Extract nested ZIP files ==="
+          echo "=== Extract nested ZIP ==="
           find build_src -type f -name "*.zip" -print0 | while IFS= read -r -d '' z; do
             d="$(dirname "$z")"
-            echo "Extracting $z"
             unzip -o "$z" -d "$d"
           done
 
       - name: Find Android project
         run: |
-          echo "=== Android projects ==="
-          find build_src -name "settings.gradle.kts" -o -name "settings.gradle"
+          PROJECT_DIR=$(dirname "$(find build_src -name 'settings.gradle.kts' -o -name 'settings.gradle' | head -n 1)")
+          echo "PROJECT_DIR=$PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Fix Android JVM targets
+        run: |
+          APP_GRADLE="$PROJECT_DIR/app/build.gradle.kts"
+
+          echo "=== Android Gradle file ==="
+          cat "$APP_GRADLE"
+
+          cat >> "$APP_GRADLE" <<'GRADLE'
+
+          // CI: force Java/Kotlin to JVM 17
+          android {
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+          }
+
+          tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+              kotlinOptions.jvmTarget = "17"
+          }
+          GRADLE
+
+          echo "=== Patched Android Gradle file ==="
+          tail -40 "$APP_GRADLE"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -47,16 +69,7 @@ jobs:
 
       - name: Set up Android SDK
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-
           SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -f "$SDKMANAGER" ]; then
-            echo "sdkmanager not found at $SDKMANAGER"
-            find /usr/local/lib/android/sdk/cmdline-tools -name sdkmanager -type f || true
-            exit 1
-          fi
 
           "$SDKMANAGER" --sdk_root=/usr/local/lib/android/sdk \
             "platform-tools" \
@@ -65,27 +78,9 @@ jobs:
 
       - name: Build debug APK
         run: |
-          PROJECT_DIR=$(dirname "$(find build_src -name 'settings.gradle.kts' -o -name 'settings.gradle' | head -n 1)")
-
-          echo "PROJECT_DIR=$PROJECT_DIR"
-
-          cat > /tmp/force-java17.gradle <<'GRADLE'
-          allprojects {
-              tasks.withType(JavaCompile).configureEach {
-                  sourceCompatibility = JavaVersion.VERSION_17
-                  targetCompatibility = JavaVersion.VERSION_17
-              }
-
-              tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-                  kotlinOptions.jvmTarget = "17"
-              }
-          }
-          GRADLE
-
           cd "$PROJECT_DIR"
 
           gradle \
-            --init-script /tmp/force-java17.gradle \
             :app:assembleDebug \
             --no-daemon \
             --stacktrace
